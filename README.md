@@ -6,7 +6,7 @@
 git clone https://github.com/graeme927/eve-scout-bot
 cd eve-scout-bot
 
-### 2. Configure env
+### 2. Configure env and provide your own discords webhook
 cp .env.example .env
 nano .env
 
