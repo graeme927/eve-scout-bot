@@ -3,7 +3,7 @@
 ## Install
 
 ### 1. Clone repo
-git clone https://github.com/graeme927/eve-scout-bot
+git clone https://github.com/graeme927/eve-scout-bot.git
 cd eve-scout-bot
 
 ### 2. Configure env and provide your own discords webhook
