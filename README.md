@@ -3,7 +3,7 @@
 ## Install
 
 ### 1. Clone repo
-git clone https://your-repo-url.git
+git clone https://github.com/graeme927/eve-scout-bot
 cd eve-scout-bot
 
 ### 2. Configure env
