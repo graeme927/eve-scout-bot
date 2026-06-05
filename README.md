@@ -16,7 +16,7 @@ nano .env
 docker compose up -d
 
 ### 4. View logs
-docker logs -f eve-scout-bot
+docker logs -f eve-scout-webhook
 
 ### 5. Stop
 docker compose down
