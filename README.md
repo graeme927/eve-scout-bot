@@ -27,25 +27,7 @@ Supports:
 ---
 
 ## Example Discord Output
-
-```text
-New Turnur Connection to V-QXXK
-
-Connection
-Turnur → V-QXXK
-
-Details
-Wormhole Type: S199
-Max Ship Size: Capital
-Time Remaining: 16 hours
-
-Region
-Insmother
-
-Signatures
-Turnur: BJO-555
-V-QXXK: HPK-193
-```
+<img width="363" height="363" alt="image" src="https://github.com/user-attachments/assets/ae184cfb-2257-42a2-a2f4-362d9e6b0666" />
 
 ---
 
