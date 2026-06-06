@@ -1,7 +1,7 @@
 import config from "./config.js"
 import { getConnections } from "./eveScout.js"
 import { send } from "./webhook.js"
-
+import { hasSeen, markSeen } from "./state.js"
 // -----------------------------
 // STATE
 // -----------------------------
@@ -101,7 +101,8 @@ export async function scan() {
 
     for (const [id, v] of curr.entries()) {
 
-      if (prev.has(id)) continue
+      if (hasSeen(id)) continue
+markSeen(id)
 
       const title =
         hub === "Thera"
