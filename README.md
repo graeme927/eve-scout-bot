@@ -20,3 +20,7 @@ docker logs -f eve-scout-webhook
 
 ### 5. Stop
 docker compose down
+
+### 6. Update
+git pull
+docker compose up --build -d
