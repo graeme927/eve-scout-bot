@@ -6,12 +6,19 @@ import {
   loadSeen,
   hasSeen,
   markSeen
-}
-from "./state.js"
+} from "./state.js"
+
+// --------------------
+// INIT
+// --------------------
 
 loadSeen()
 
 let running = false
+
+// --------------------
+// WEBHOOK QUEUE
+// --------------------
 
 const queue = []
 
@@ -53,7 +60,7 @@ async function processQueue() {
     catch (err) {
 
       console.error(
-        "❌ webhook:",
+        "❌ webhook failed:",
         err.message
       )
 
@@ -66,6 +73,10 @@ async function processQueue() {
   sending = false
 
 }
+
+// --------------------
+// MAIN SCAN
+// --------------------
 
 export async function scan() {
 
@@ -84,20 +95,18 @@ export async function scan() {
   try {
 
     console.log(
-      "\n🔄 scan starting"
+      "\n🔄 EvE-Scout scan cycle starting"
     )
 
     const data =
       await getConnections()
 
     if (
-      !Array.isArray(
-        data
-      )
+      !Array.isArray(data)
     ) {
 
-      console.log(
-        "❌ invalid response"
+      console.error(
+        "❌ Invalid response"
       )
 
       return
@@ -110,9 +119,7 @@ export async function scan() {
     ) {
 
       const id =
-        String(
-          sig.id
-        )
+        String(sig.id)
 
       if (
         hasSeen(id)
@@ -120,29 +127,42 @@ export async function scan() {
         continue
       }
 
+      const inSystem =
+        sig.in_system_name
+
+      const outSystem =
+        sig.out_system_name
+
       const hub =
         config.tracked.find(
           h =>
-            sig.in_system_name === h ||
-            sig.out_system_name === h
+            inSystem === h ||
+            outSystem === h
         )
 
       if (
         !hub
-      )
+      ) {
         continue
+      }
+
+      const destination =
+        inSystem === hub
+          ? outSystem
+          : inSystem
 
       const region =
-
         sig.in_region_name ||
-
         sig.out_region_name ||
-
         "Unknown"
+
+      // --------------------
+      // REGION FILTER
+      // --------------------
 
       if (
 
-        config.filterRegions.length &&
+        config.filterRegions.length > 0 &&
 
         !config.filterRegions.includes(
           region.toLowerCase()
@@ -151,14 +171,22 @@ export async function scan() {
       ) {
 
         console.log(
-          `⏭ filtered ${region}`
+          `⏭ Region filtered: ${region}`
         )
 
         continue
 
       }
 
-      const payload = {
+      console.log(
+        `🆕 ${hub} → ${destination}`
+      )
+
+      // --------------------
+      // EMBED FORMAT
+      // --------------------
+
+      queue.push({
 
         username:
           "EvE Scout",
@@ -168,58 +196,125 @@ export async function scan() {
           {
 
             title:
-              hub === "Thera"
-                ? "🟣 Thera Wormhole Intel"
-                : "🔵 Turnur Wormhole Intel",
-
-            description:
-
-`**System:** ${
-sig.in_system_name === hub
-? sig.out_system_name
-: sig.in_system_name
-}
-
-**IN Sig:** ${
-sig.in_signature
-}
-
-**OUT Sig:** ${
-sig.out_signature
-}
-
-**Region:** ${
-region
-}
-
-**Max Ship:** ${
-sig.max_ship_size
-}
-
-**Remaining:** ${
-sig.remaining_hours
-}h`,
+              `New ${hub} Connection to ${region}`,
 
             color:
               hub === "Thera"
                 ? 0x9b59b6
-                : 0x3498db
+                : 0xf39c12,
+
+            fields: [
+
+              {
+
+                name:
+                  "Connection",
+
+                value:
+                  `${hub} → ${destination}`,
+
+                inline:
+                  false
+
+              },
+
+              {
+
+                name:
+                  "Details",
+
+                value:
+
+`Wormhole Type: ${
+sig.wh_type || "Unknown"
+}
+
+Max Ship Size: ${
+sig.max_ship_size || "Unknown"
+}
+
+Time Remaining: ${
+sig.remaining_hours
+? `${sig.remaining_hours} hours`
+: "Unknown"
+}`,
+
+                inline:
+                  true
+
+              },
+
+              {
+
+                name:
+                  "Region",
+
+                value:
+                  region,
+
+                inline:
+                  true
+
+              },
+
+              {
+
+                name:
+                  "Signatures",
+
+                value:
+
+`${hub}: ${
+sig.in_signature || "Unknown"
+}
+
+${destination}: ${
+sig.out_signature || "Unknown"
+}`,
+
+                inline:
+                  false
+
+              }
+
+            ],
+
+            footer: {
+
+              text:
+                "EvE Scout API"
+
+            },
+
+            timestamp:
+              new Date()
 
           }
 
         ]
 
-      }
+      })
 
-      queue.push(
-        payload
+      markSeen(
+        id
       )
-
-      markSeen(id)
 
     }
 
     await processQueue()
+
+    console.log(
+      "✔ scan complete"
+    )
+
+  }
+
+  catch (err) {
+
+    console.error(
+      "❌ Scan failed:",
+      err.message
+    )
 
   }
 
