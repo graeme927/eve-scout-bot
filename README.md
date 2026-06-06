@@ -23,4 +23,5 @@ docker compose down
 
 ### 6. Update
 git pull
+
 docker compose up --build -d
