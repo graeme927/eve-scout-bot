@@ -1,40 +1,17 @@
-import cron
-from "node-cron"
-
-import config
-from "./config.js"
-
-import {
-scan
-}
-from "./scanner.js"
+import config from "./config.js"
+import { scan } from "./scanner.js"
 
 console.log(
-"Watching wormholes..."
+  `Watching wormholes every ${config.interval}s`
 )
-
-scan()
-
-cron.schedule(
-
-`*/${config.poll} * * * * *`,
-
-async ()=>{
-
-try{
 
 await scan()
 
-}
+setInterval(
 
-catch(e){
+  scan,
 
-console.log(
-e.message
-)
-
-}
-
-}
+  config.interval *
+  1000
 
 )
