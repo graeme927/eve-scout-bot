@@ -20,7 +20,14 @@ Add regions you wish to watch, or leave blank to see all
 docker compose up --build -d
 
 ### 4. View logs
-docker logs -f eve-scout-bot
+docker logs -f eve-scout-webhook
 
 ### 5. Stop
 docker compose down
+
+### 6. Update
+cd eve-scout-bot
+
+git pull
+
+docker compose up --build -d
