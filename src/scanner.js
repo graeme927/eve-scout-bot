@@ -1,147 +1,232 @@
 import config from "./config.js"
 import { getConnections } from "./eveScout.js"
 import { send } from "./webhook.js"
-import { hasSeen, markSeen } from "./state.js"
-// -----------------------------
-// STATE
-// -----------------------------
-const lastState = {
-  Thera: new Map(),
-  Turnur: new Map()
-}
 
-// -----------------------------
-// QUEUE
-// -----------------------------
+import {
+  loadSeen,
+  hasSeen,
+  markSeen
+}
+from "./state.js"
+
+loadSeen()
+
+let running = false
+
 const queue = []
+
 let sending = false
 
 function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms))
+  return new Promise(
+    r => setTimeout(r, ms)
+  )
 }
 
 async function processQueue() {
-  if (sending) return
+
+  if (sending)
+    return
+
   sending = true
 
-  while (queue.length > 0) {
-    const payload = queue.shift()
+  while (
+    queue.length
+  ) {
+
+    const payload =
+      queue.shift()
 
     try {
-      await send(config.webhook, payload)
-      console.log("📡 webhook sent")
-    } catch (err) {
-      console.error("❌ webhook failed:", err.message)
+
+      await send(
+        config.webhook,
+        payload
+      )
+
+      console.log(
+        "📡 webhook sent"
+      )
+
+    }
+
+    catch (err) {
+
+      console.error(
+        "❌ webhook:",
+        err.message
+      )
+
     }
 
     await sleep(1200)
+
   }
 
   sending = false
+
 }
 
-// -----------------------------
-// MAIN SCAN
-// -----------------------------
 export async function scan() {
-  console.log("\n🔄 EvE-Scout scan cycle starting")
 
-  let data = []
+  if (running) {
 
-  try {
-    data = await getConnections()
-  } catch (err) {
-    console.error("❌ API error:", err.message)
-    return
-  }
-
-  if (!Array.isArray(data)) {
-    console.error("❌ invalid API response")
-    return
-  }
-
-  const current = {
-    Thera: new Map(),
-    Turnur: new Map()
-  }
-
-  // -----------------------------
-  // BUILD STATE
-  // -----------------------------
-  for (const sig of data) {
-
-    const id = sig.id
-
-    const inSystem = sig.in_system_name
-    const outSystem = sig.out_system_name
-
-    const hub = config.tracked.find(h =>
-      inSystem === h || outSystem === h
+    console.log(
+      "⏭ scan skipped"
     )
 
-    if (!hub) continue
+    return
 
-    current[hub].set(id, {
-      system: inSystem,
-      inSig: sig.in_signature,
-      outSig: sig.out_signature,
-      region: sig.in_region_name || sig.out_region_name || "Unknown",
-      ship: sig.max_ship_size,
-      hours: sig.remaining_hours
-    })
   }
 
-  // -----------------------------
-  // DIFF + SEND
-  // -----------------------------
-  for (const hub of config.tracked) {
+  running = true
 
-    const prev = lastState[hub]
-    const curr = current[hub]
+  try {
 
-    for (const [id, v] of curr.entries()) {
+    console.log(
+      "\n🔄 scan starting"
+    )
 
-      if (hasSeen(id)) continue
-markSeen(id)
+    const data =
+      await getConnections()
 
-      const title =
-        hub === "Thera"
-          ? "🟣 Thera Wormhole Intel"
-          : "🔵 Turnur Wormhole Intel"
+    if (
+      !Array.isArray(
+        data
+      )
+    ) {
 
-      const message =
-`🛰️ **Wormhole Update**
+      console.log(
+        "❌ invalid response"
+      )
 
-**System:** ${v.system}
+      return
 
-**IN Sig:** ${v.inSig || "Unknown"} (${hub} side)
-**OUT Sig:** ${v.outSig || "Unknown"} (K-space side)
-
-**Region:** ${v.region}
-**Max Ship:** ${v.ship || "Unknown"}
-**Remaining:** ${v.hours ? `${v.hours}h` : "Unknown"}
-`
-
-      queue.push({
-        username: "EvE Scout",
-        embeds: [
-          {
-            title,
-
-            description: message,
-
-            color: hub === "Thera" ? 0x9b59b6 : 0x3498db,
-
-            timestamp: new Date()
-          }
-        ]
-      })
     }
 
-    lastState[hub] = curr
+    for (
+      const sig
+      of data
+    ) {
+
+      const id =
+        String(
+          sig.id
+        )
+
+      if (
+        hasSeen(id)
+      ) {
+        continue
+      }
+
+      const hub =
+        config.tracked.find(
+          h =>
+            sig.in_system_name === h ||
+            sig.out_system_name === h
+        )
+
+      if (
+        !hub
+      )
+        continue
+
+      const region =
+
+        sig.in_region_name ||
+
+        sig.out_region_name ||
+
+        "Unknown"
+
+      if (
+
+        config.filterRegions.length &&
+
+        !config.filterRegions.includes(
+          region.toLowerCase()
+        )
+
+      ) {
+
+        console.log(
+          `⏭ filtered ${region}`
+        )
+
+        continue
+
+      }
+
+      const payload = {
+
+        username:
+          "EvE Scout",
+
+        embeds: [
+
+          {
+
+            title:
+              hub === "Thera"
+                ? "🟣 Thera Wormhole Intel"
+                : "🔵 Turnur Wormhole Intel",
+
+            description:
+
+`**System:** ${
+sig.in_system_name === hub
+? sig.out_system_name
+: sig.in_system_name
+}
+
+**IN Sig:** ${
+sig.in_signature
+}
+
+**OUT Sig:** ${
+sig.out_signature
+}
+
+**Region:** ${
+region
+}
+
+**Max Ship:** ${
+sig.max_ship_size
+}
+
+**Remaining:** ${
+sig.remaining_hours
+}h`,
+
+            color:
+              hub === "Thera"
+                ? 0x9b59b6
+                : 0x3498db
+
+          }
+
+        ]
+
+      }
+
+      queue.push(
+        payload
+      )
+
+      markSeen(id)
+
+    }
+
+    await processQueue()
+
   }
 
-  processQueue()
+  finally {
 
-  console.log("✔ scan complete")
+    running = false
+
+  }
+
 }
