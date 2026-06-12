@@ -3,200 +3,105 @@ import { getConnections } from "./eveScout.js"
 import { send } from "./webhook.js"
 
 import {
-  loadSeen,
-  hasSeen,
-  markSeen
+  loadState,
+  saveState,
+  getState
 } from "./state.js"
 
-// --------------------
-// INIT
-// --------------------
-
-loadSeen()
+loadState()
 
 let running = false
 
-// --------------------
-// WEBHOOK QUEUE
-// --------------------
-
 const queue = []
-
 let sending = false
 
+const MISSING_THRESHOLD = 3
+
 function sleep(ms) {
-  return new Promise(
-    r => setTimeout(r, ms)
-  )
+  return new Promise(r => setTimeout(r, ms))
 }
 
 async function processQueue() {
 
-  if (sending)
-    return
-
+  if (sending) return
   sending = true
 
-  while (
-    queue.length
-  ) {
+  while (queue.length) {
 
-    const payload =
-      queue.shift()
+    const payload = queue.shift()
 
     try {
-
-      await send(
-        config.webhook,
-        payload
-      )
-
-      console.log(
-        "📡 webhook sent"
-      )
-
-    }
-
-    catch (err) {
-
-      console.error(
-        "❌ webhook failed:",
-        err.message
-      )
-
+      await send(config.webhook, payload)
+      console.log("📡 webhook sent")
+    } catch (err) {
+      console.error("❌ webhook failed:", err.message)
     }
 
     await sleep(1200)
-
   }
 
   sending = false
-
 }
-
-// --------------------
-// MAIN SCAN
-// --------------------
 
 export async function scan() {
 
-  if (running) {
-
-    console.log(
-      "⏭ scan skipped"
-    )
-
-    return
-
-  }
-
+  if (running) return
   running = true
 
   try {
 
-    console.log(
-      "\n🔄 EvE-Scout scan cycle starting"
-    )
+    console.log("\n🔄 EvE-Scout scan cycle starting")
 
-    const data =
-      await getConnections()
+    const data = await getConnections()
+    if (!Array.isArray(data)) return
 
-    if (
-      !Array.isArray(data)
-    ) {
+    const state = getState()
 
-      console.error(
-        "❌ Invalid response"
+    const currentIds = new Set()
+
+    // -----------------------------
+    // PROCESS ACTIVE CONNECTIONS
+    // -----------------------------
+
+    for (const sig of data) {
+
+      const id = String(sig.id)
+      currentIds.add(id)
+
+      const inSystem = sig.in_system_name
+      const outSystem = sig.out_system_name
+
+      const hub = config.tracked.find(
+        h => inSystem === h || outSystem === h
       )
 
-      return
-
-    }
-
-    for (
-      const sig
-      of data
-    ) {
-
-      const id =
-        String(sig.id)
-
-      if (
-        hasSeen(id)
-      ) {
-        continue
-      }
-
-      const inSystem =
-        sig.in_system_name
-
-      const outSystem =
-        sig.out_system_name
-
-      const hub =
-        config.tracked.find(
-          h =>
-            inSystem === h ||
-            outSystem === h
-        )
-
-      if (
-        !hub
-      ) {
-        continue
-      }
+      if (!hub) continue
 
       const destination =
-        inSystem === hub
-          ? outSystem
-          : inSystem
+        inSystem === hub ? outSystem : inSystem
 
       const region =
         sig.in_region_name ||
         sig.out_region_name ||
         "Unknown"
 
-      // --------------------
-      // REGION FILTER
-      // --------------------
-
       if (
+        config.filterRegions.length &&
+        !config.filterRegions.includes(region.toLowerCase())
+      ) continue
 
-        config.filterRegions.length > 0 &&
+      // -----------------------------
+      // NEW CONNECTION
+      // -----------------------------
 
-        !config.filterRegions.includes(
-          region.toLowerCase()
-        )
+      if (!state[id]) {
 
-      ) {
+        console.log(`🆕 ${hub} → ${destination}`)
 
-        console.log(
-          `⏭ Region filtered: ${region}`
-        )
-
-        continue
-
-      }
-
-      console.log(
-        `🆕 ${hub} → ${destination}`
-      )
-
-      // --------------------
-      // EMBED FORMAT
-      // --------------------
-
-      queue.push({
-
-        username:
-          "EvE Scout",
-
-        embeds: [
-
-          {
-
-            title:
-              `New ${hub} Connection to ${region}`,
+        queue.push({
+          username: "EvE Scout",
+          embeds: [{
+            title: `New ${hub} Connection to ${destination}`,
 
             color:
               hub === "Thera"
@@ -204,124 +109,95 @@ export async function scan() {
                 : 0xf39c12,
 
             fields: [
-
               {
-
-                name:
-                  "Connection",
-
-                value:
-                  `${hub} → ${destination}`,
-
-                inline:
-                  false
-
+                name: "Connection",
+                value: `${hub} → ${destination}`
               },
-
               {
-
-                name:
-                  "Details",
-
-                value:
-
-`Wormhole Type: ${
-sig.wh_type || "Unknown"
-}
-
-Max Ship Size: ${
-sig.max_ship_size || "Unknown"
-}
-
-Time Remaining: ${
-sig.remaining_hours
-? `${sig.remaining_hours} hours`
-: "Unknown"
-}`,
-
-                inline:
-                  true
-
+                name: "Region",
+                value: region,
+                inline: true
               },
-
               {
-
-                name:
-                  "Region",
-
+                name: "Signatures",
                 value:
-                  region,
-
-                inline:
-                  true
-
-              },
-
-              {
-
-                name:
-                  "Signatures",
-
-                value:
-
-`${hub}: ${
-sig.in_signature || "Unknown"
-}
-
-${destination}: ${
-sig.out_signature || "Unknown"
-}`,
-
-                inline:
-                  false
-
+`${hub}: ${sig.in_signature || "Unknown"}
+${destination}: ${sig.out_signature || "Unknown"}`
               }
-
             ],
 
-            footer: {
+            timestamp: new Date()
+          }]
+        })
 
-              text:
-                "EvE Scout API"
+        state[id] = {
+          hub,
+          destination,
+          region,
+          missingCount: 0,
+          firstSeen: Date.now(),
+          lastSeen: Date.now()
+        }
 
-            },
+        continue
+      }
 
-            timestamp:
-              new Date()
+      // -----------------------------
+      // UPDATE EXISTING
+      // -----------------------------
 
-          }
-
-        ]
-
-      })
-
-      markSeen(
-        id
-      )
-
+      state[id].lastSeen = Date.now()
+      state[id].missingCount = 0
     }
+
+    // -----------------------------
+    // DETECT REMOVED CONNECTIONS
+    // -----------------------------
+
+    for (const [id, sig] of Object.entries(state)) {
+
+      if (currentIds.has(id)) continue
+
+      sig.missingCount++
+
+      if (sig.missingCount >= MISSING_THRESHOLD) {
+
+        console.log(`🔴 Closed ${sig.hub} → ${sig.destination}`)
+
+        queue.push({
+          username: "EvE Scout",
+          embeds: [{
+            title: `Closed ${sig.hub} Connection to ${sig.destination}`,
+
+            color: 0xe74c3c,
+
+            fields: [
+              {
+                name: "Connection",
+                value: `${sig.hub} → ${sig.destination}`
+              },
+              {
+                name: "Region",
+                value: sig.region
+              }
+            ],
+
+            timestamp: new Date()
+          }]
+        })
+
+        delete state[id]
+
+      }
+    }
+
+    saveState()
 
     await processQueue()
 
-    console.log(
-      "✔ scan complete"
-    )
+    console.log("✔ scan complete")
 
-  }
-
-  catch (err) {
-
-    console.error(
-      "❌ Scan failed:",
-      err.message
-    )
-
-  }
-
-  finally {
-
+  } finally {
     running = false
-
   }
-
 }
