@@ -84,6 +84,10 @@ export async function scan() {
         sig.in_region_name ||
         sig.out_region_name ||
         "Unknown"
+        
+        const size =
+            sig.max_ship_size ||
+            "Unknown"
 
       if (
         config.filterRegions.length &&
@@ -118,6 +122,11 @@ export async function scan() {
                 value: region,
                 inline: true
               },
+              {
+                name : "Size",
+                value: size,
+                inline: true
+                },
               {
                 name: "Signatures",
                 value:
