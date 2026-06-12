@@ -101,7 +101,7 @@ export async function scan() {
         queue.push({
           username: "EvE Scout",
           embeds: [{
-            title: `New ${hub} Connection to ${destination}`,
+            title: `New ${hub} Connection to ${region}`,
 
             color:
               hub === "Thera"
@@ -167,7 +167,7 @@ ${destination}: ${sig.out_signature || "Unknown"}`
         queue.push({
           username: "EvE Scout",
           embeds: [{
-            title: `Closed ${sig.hub} Connection to ${sig.destination}`,
+            title: `Closed ${sig.hub} Connection to ${sig.region}`,
 
             color: 0xe74c3c,
 
